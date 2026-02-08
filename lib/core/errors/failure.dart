@@ -2,6 +2,13 @@ abstract class Failure {
   final String message;
 
   const Failure(this.message);
+  factory Failure.network(String message) = NetworkFailure;
+  factory Failure.server(String message) = ServerFailure;
+  factory Failure.validation(String message) = ValidationFailure;
+  factory Failure.authentication(String message) = AuthenticationFailure;
+  factory Failure.permission(String message) = PermissionFailure;
+  factory Failure.notFound(String message) = NotFoundFailure;
+  factory Failure.generic(String message) = GenericFailure;
 
   @override
   String toString() => message;

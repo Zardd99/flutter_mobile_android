@@ -1,6 +1,9 @@
 import 'package:restaurant_mobile_app/core/errors/result.dart';
 import 'package:restaurant_mobile_app/domain/entities/menu_item.dart';
 import 'package:restaurant_mobile_app/domain/repositories/menu_repository.dart';
+export 'create_menu_item_use_case.dart';
+export 'update_menu_item_use_case.dart';
+export 'delete_menu_item_use_case.dart';
 
 class GetAllMenuItemsUseCase {
   final MenuRepository _menuRepository;

@@ -3,15 +3,17 @@ import 'package:restaurant_mobile_app/domain/entities/menu_item.dart';
 
 class MenuItemCard extends StatelessWidget {
   final MenuItem menuItem;
-  final VoidCallback? onTap;
+  final VoidCallback onTap;
   final VoidCallback? onToggleAvailability;
+  final VoidCallback? onDelete;
   final bool showActions;
 
   const MenuItemCard({
     super.key,
     required this.menuItem,
-    this.onTap,
+    required this.onTap,
     this.onToggleAvailability,
+    this.onDelete,
     this.showActions = true,
   });
 
@@ -27,7 +29,7 @@ class MenuItemCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header with name and price
+              // Header with name, price, and delete button
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -41,13 +43,27 @@ class MenuItemCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  Text(
-                    '\$${menuItem.price.toStringAsFixed(2)}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
+                  Row(
+                    children: [
+                      Text(
+                        '\$${menuItem.price.toStringAsFixed(2)}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                      if (showActions && onDelete != null)
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete_outline,
+                            color: Colors.red,
+                            size: 20,
+                          ),
+                          onPressed: onDelete,
+                          tooltip: 'Delete item',
+                        ),
+                    ],
                   ),
                 ],
               ),
@@ -101,19 +117,25 @@ class MenuItemCard extends StatelessWidget {
                     ),
 
                   // Availability chip
-                  Chip(
-                    label: Text(
-                      menuItem.availability ? 'Available' : 'Out of Stock',
+                  if (showActions && onToggleAvailability != null)
+                    InkWell(
+                      onTap: onToggleAvailability,
+                      child: Chip(
+                        label: Text(
+                          menuItem.availability ? 'Available' : 'Out of Stock',
+                        ),
+                        backgroundColor: menuItem.availability
+                            ? Colors.green.shade50
+                            : Colors.red.shade50,
+                        labelStyle: TextStyle(
+                          color: menuItem.availability
+                              ? Colors.green
+                              : Colors.red,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                    backgroundColor: menuItem.availability
-                        ? Colors.green.shade50
-                        : Colors.red.shade50,
-                    labelStyle: TextStyle(
-                      color: menuItem.availability ? Colors.green : Colors.red,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
                 ],
               ),
 

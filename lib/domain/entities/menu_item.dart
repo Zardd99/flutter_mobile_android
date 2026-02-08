@@ -1,20 +1,19 @@
-class MenuItem {
+import 'package:equatable/equatable.dart';
+
+class MenuItem extends Equatable {
   final String id;
   final String name;
   final String description;
   final double price;
   final String categoryId;
   final String? categoryName;
-  final List<IngredientReference> ingredientReferences;
   final List<String> dietaryTags;
   final bool availability;
   final int preparationTime;
   final bool chefSpecial;
-  final double averageRating;
-  final int reviewCount;
   final String? imageUrl;
-  final double? costPrice;
-  final double? profitMargin;
+  final DateTime createdAt;
+  final DateTime updatedAt;
 
   const MenuItem({
     required this.id,
@@ -23,97 +22,102 @@ class MenuItem {
     required this.price,
     required this.categoryId,
     this.categoryName,
-    required this.ingredientReferences,
     required this.dietaryTags,
     required this.availability,
     required this.preparationTime,
     required this.chefSpecial,
-    required this.averageRating,
-    required this.reviewCount,
     this.imageUrl,
-    this.costPrice,
-    this.profitMargin,
+    required this.createdAt,
+    required this.updatedAt,
   });
 
   factory MenuItem.fromJson(Map<String, dynamic> json) {
     final category = json['category'];
 
     return MenuItem(
-      id: json['_id']?.toString() ?? '',
+      id: json['_id']?.toString() ?? json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       description: json['description'] ?? '',
-      price: (json['price'] as num).toDouble(),
+      price: (json['price'] as num?)?.toDouble() ?? 0.0,
       categoryId: category is String
           ? category
           : category?['_id']?.toString() ?? '',
       categoryName: category is Map<String, dynamic> ? category['name'] : null,
-      ingredientReferences:
-          (json['ingredientReferences'] as List<dynamic>?)
-              ?.map((item) => IngredientReference.fromJson(item))
-              .toList() ??
-          [],
-      dietaryTags:
-          (json['dietaryTags'] as List<dynamic>?)
-              ?.map((item) => item.toString())
-              .toList() ??
-          [],
+      dietaryTags: List<String>.from(json['dietaryTags'] ?? []),
       availability: json['availability'] ?? true,
       preparationTime: json['preparationTime'] ?? 15,
       chefSpecial: json['chefSpecial'] ?? false,
-      averageRating: (json['averageRating'] as num?)?.toDouble() ?? 0.0,
-      reviewCount: json['reviewCount'] ?? 0,
-      imageUrl: json['imageUrl']?.toString(),
-      costPrice: (json['costPrice'] as num?)?.toDouble(),
-      profitMargin: (json['profitMargin'] as num?)?.toDouble(),
+      imageUrl: json['imageUrl']?.toString() ?? json['image']?.toString(),
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'].toString())
+          : DateTime.now(),
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'].toString())
+          : DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      '_id': id,
+      if (id.isNotEmpty) '_id': id,
       'name': name,
       'description': description,
       'price': price,
       'category': categoryId,
-      'ingredientReferences': ingredientReferences
-          .map((e) => e.toJson())
-          .toList(),
       'dietaryTags': dietaryTags,
       'availability': availability,
       'preparationTime': preparationTime,
       'chefSpecial': chefSpecial,
-      'averageRating': averageRating,
-      'reviewCount': reviewCount,
-      'imageUrl': imageUrl,
-      'costPrice': costPrice,
-      'profitMargin': profitMargin,
+      if (imageUrl != null) 'imageUrl': imageUrl,
     };
   }
-}
 
-class IngredientReference {
-  final String ingredientId;
-  final double quantity;
-  final String unit;
-
-  const IngredientReference({
-    required this.ingredientId,
-    required this.quantity,
-    required this.unit,
-  });
-
-  factory IngredientReference.fromJson(Map<String, dynamic> json) {
-    return IngredientReference(
-      ingredientId:
-          json['ingredient']?.toString() ??
-          json['ingredientId']?.toString() ??
-          '',
-      quantity: (json['quantity'] as num).toDouble(),
-      unit: json['unit'] ?? '',
+  MenuItem copyWith({
+    String? id,
+    String? name,
+    String? description,
+    double? price,
+    String? categoryId,
+    String? categoryName,
+    List<String>? dietaryTags,
+    bool? availability,
+    int? preparationTime,
+    bool? chefSpecial,
+    String? imageUrl,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return MenuItem(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      description: description ?? this.description,
+      price: price ?? this.price,
+      categoryId: categoryId ?? this.categoryId,
+      categoryName: categoryName ?? this.categoryName,
+      dietaryTags: dietaryTags ?? this.dietaryTags,
+      availability: availability ?? this.availability,
+      preparationTime: preparationTime ?? this.preparationTime,
+      chefSpecial: chefSpecial ?? this.chefSpecial,
+      imageUrl: imageUrl ?? this.imageUrl,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {'ingredient': ingredientId, 'quantity': quantity, 'unit': unit};
-  }
+  @override
+  List<Object?> get props => [
+    id,
+    name,
+    description,
+    price,
+    categoryId,
+    categoryName,
+    dietaryTags,
+    availability,
+    preparationTime,
+    chefSpecial,
+    imageUrl,
+    createdAt,
+    updatedAt,
+  ];
 }

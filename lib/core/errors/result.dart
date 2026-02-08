@@ -43,10 +43,26 @@ sealed class Result<T> {
     };
   }
 
+  Result<R> mapSuccess<R>(R Function(T value) transform) {
+    return switch (this) {
+      Success<T>(:final value) => Success(transform(value)),
+      ResultFailure<T>(:final failure) => ResultFailure(failure),
+    };
+  }
+
   Result<R> flatMap<R>(Result<R> Function(T value) transform) {
     return switch (this) {
       Success<T>(:final value) => transform(value),
       ResultFailure<T>(:final failure) => ResultFailure(failure),
+    };
+  }
+
+  Future<Result<R>> asyncMap<R>(
+    Future<Result<R>> Function(T value) transform,
+  ) async {
+    return switch (this) {
+      Success<T>(:final value) => await transform(value),
+      ResultFailure<T>(:final failure) => ResultFailure<R>(failure),
     };
   }
 }

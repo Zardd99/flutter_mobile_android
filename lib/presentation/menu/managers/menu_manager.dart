@@ -1,11 +1,21 @@
 import 'package:restaurant_mobile_app/core/errors/result.dart';
 import 'package:restaurant_mobile_app/domain/entities/menu_item.dart';
 import 'package:restaurant_mobile_app/domain/repositories/menu_repository.dart';
+import 'package:restaurant_mobile_app/domain/use_cases/create_menu_item_use_case.dart';
+import 'package:restaurant_mobile_app/domain/use_cases/delete_menu_item_use_case.dart';
+import 'package:restaurant_mobile_app/domain/use_cases/update_menu_item_use_case.dart';
 
 class MenuManager {
   final MenuRepository _menuRepository;
+  late final CreateMenuItemUseCase _createUseCase;
+  late final UpdateMenuItemUseCase _updateUseCase;
+  late final DeleteMenuItemUseCase _deleteUseCase;
 
-  MenuManager(this._menuRepository);
+  MenuManager(this._menuRepository) {
+    _createUseCase = CreateMenuItemUseCase(_menuRepository);
+    _updateUseCase = UpdateMenuItemUseCase(_menuRepository);
+    _deleteUseCase = DeleteMenuItemUseCase(_menuRepository);
+  }
 
   Future<Result<List<MenuItem>>> getAllMenuItems({
     String? category,
@@ -20,6 +30,7 @@ class MenuManager {
       search: search,
       available: available,
       chefSpecial: chefSpecial,
+      token: null,
     );
   }
 
@@ -27,40 +38,37 @@ class MenuManager {
     return await _menuRepository.getMenuItemById(id, null);
   }
 
-  Future<Result<MenuItem>> createMenuItem(
-    String name,
-    String description,
-    double price,
-    String categoryId,
-    List<Map<String, dynamic>> ingredients,
-    List<String> dietaryTags,
-    int preparationTime,
-    bool chefSpecial,
-    bool availability,
-  ) async {
-    final data = {
-      'name': name,
-      'description': description,
-      'price': price,
-      'category': categoryId,
-      'ingredientReferences': ingredients,
-      'dietaryTags': dietaryTags,
-      'preparationTime': preparationTime,
-      'chefSpecial': chefSpecial,
-      'availability': availability,
-    };
-    return await _menuRepository.createMenuItem(data, '');
+  Future<Result<MenuItem>> createMenuItem({
+    required String name,
+    required String description,
+    required double price,
+    required String categoryId,
+    required List<String> dietaryTags,
+    required int preparationTime,
+    bool chefSpecial = false,
+    bool availability = true,
+  }) async {
+    return await _createUseCase.execute(
+      name: name,
+      description: description,
+      price: price,
+      categoryId: categoryId,
+      dietaryTags: dietaryTags,
+      preparationTime: preparationTime,
+      chefSpecial: chefSpecial,
+      availability: availability,
+    );
   }
 
   Future<Result<MenuItem>> updateMenuItem(
     String id,
     Map<String, dynamic> updates,
   ) async {
-    return await _menuRepository.updateMenuItem(id, updates, '');
+    return await _updateUseCase.execute(id: id, updates: updates);
   }
 
   Future<Result<void>> deleteMenuItem(String id) async {
-    return await _menuRepository.deleteMenuItem(id, '');
+    return await _deleteUseCase.execute(id: id);
   }
 
   Future<Result<List<MenuItem>>> filterMenuItems({
@@ -69,33 +77,13 @@ class MenuManager {
     required bool? availableOnly,
     required bool? chefSpecialOnly,
   }) async {
-    final result = await _menuRepository.getAllMenuItems(
+    return await _menuRepository.getAllMenuItems(
       category: category,
       search: searchQuery,
       available: availableOnly,
       chefSpecial: chefSpecialOnly,
+      token: null,
     );
-
-    return result.map((items) {
-      return items.where((item) {
-        bool matches = true;
-        if (searchQuery != null && searchQuery.isNotEmpty) {
-          matches =
-              matches &&
-              (item.name.toLowerCase().contains(searchQuery.toLowerCase()) ||
-                  item.description.toLowerCase().contains(
-                    searchQuery.toLowerCase(),
-                  ));
-        }
-        if (availableOnly == true) {
-          matches = matches && item.availability;
-        }
-        if (chefSpecialOnly == true) {
-          matches = matches && item.chefSpecial;
-        }
-        return matches;
-      }).toList();
-    });
   }
 
   double calculateProfitMargin(double price, double cost) {

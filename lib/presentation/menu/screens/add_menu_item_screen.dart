@@ -1,7 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:restaurant_mobile_app/presentation/menu/coordinators/menu_coordinator.dart';
+import 'package:restaurant_mobile_app/presentation/menu/view_models/menu_view_model.dart';
+import 'package:restaurant_mobile_app/presentation/menu/widgets/menu_item_form.dart';
 
-class AddMenuItemScreen extends StatelessWidget {
+class AddMenuItemScreen extends StatefulWidget {
   const AddMenuItemScreen({super.key});
+
+  @override
+  State<AddMenuItemScreen> createState() => _AddMenuItemScreenState();
+}
+
+class _AddMenuItemScreenState extends State<AddMenuItemScreen> {
+  late MenuCoordinator _coordinator;
+  late MenuViewModel _viewModel;
+  final _formKey = GlobalKey<MenuItemFormState>();
+  bool _isSubmitting = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _coordinator = MenuCoordinator(context);
+    _viewModel = Provider.of<MenuViewModel>(context, listen: false);
+  }
+
+  Future<void> _submitForm() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      final formData = _formKey.currentState!.getFormData();
+
+      final result = await _viewModel.createMenuItem(
+        name: formData['name'] as String,
+        description: formData['description'] as String,
+        price: formData['price'] as double,
+        categoryId: formData['categoryId'] as String,
+        dietaryTags: List<String>.from(formData['dietaryTags']),
+        preparationTime: formData['preparationTime'] as int,
+        chefSpecial: formData['chefSpecial'] as bool,
+        availability: formData['availability'] as bool,
+      );
+
+      result.fold(
+        onSuccess: (menuItem) {
+          _coordinator.showSuccessSnackBar('Menu item created successfully');
+          _coordinator.navigateBack();
+        },
+        onFailure: (failure) {
+          _coordinator.showErrorSnackBar(failure.message);
+        },
+      );
+    } catch (e) {
+      _coordinator.showErrorSnackBar('Failed to create menu item: $e');
+    } finally {
+      setState(() {
+        _isSubmitting = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,22 +72,23 @@ class AddMenuItemScreen extends StatelessWidget {
         title: const Text('Add Menu Item'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
+          onPressed: _isSubmitting ? null : () => _coordinator.navigateBack(),
         ),
-      ),
-      body: const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.add_circle, size: 80, color: Colors.green),
-            SizedBox(height: 20),
-            Text(
-              'Add Menu Item Screen',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+        actions: [
+          if (_isSubmitting)
+            const Padding(
+              padding: EdgeInsets.only(right: 16),
+              child: CircularProgressIndicator(),
             ),
-            SizedBox(height: 10),
-            Text('Coming soon...', style: TextStyle(color: Colors.grey)),
-          ],
+        ],
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: MenuItemForm(
+          key: _formKey,
+          onSubmit: _submitForm,
+          isSubmitting: _isSubmitting,
+          submitButtonText: 'Create Item',
         ),
       ),
     );
