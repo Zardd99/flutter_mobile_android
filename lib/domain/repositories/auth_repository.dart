@@ -14,7 +14,6 @@ abstract class AuthRepository {
   Future<Result<void>> changePassword(ChangePasswordData data, String token);
   Future<Result<void>> logout();
 
-  // Token management
   Future<Result<String>> getStoredToken();
   Future<Result<void>> saveToken(String token);
   Future<Result<void>> clearToken();
