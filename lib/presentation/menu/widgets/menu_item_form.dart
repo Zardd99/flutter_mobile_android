@@ -1,11 +1,54 @@
+// 📁 menu_item_form.dart
+///
+/// This file provides a reusable form widget for creating and editing menu items.
+/// It includes all necessary input fields, validation, and state management
+/// for the menu item creation/edition flow. The form is designed to be used
+/// within a modal bottom sheet or a dedicated screen.
+
 import 'package:flutter/material.dart';
 
+/// A stateful widget that renders a complete form for menu item data.
+///
+/// This form is used both for creating new menu items and editing existing ones.
+/// It manages its own internal state (controllers, selected tags, toggles) and
+/// exposes methods to validate and retrieve the form data. The form is fully
+/// controlled by the parent widget via [initialData], [onSubmit], [isSubmitting],
+/// and [submitButtonText].
+///
+/// The form includes:
+/// - Text fields for name, description, price, category ID, preparation time
+/// - A filter chip selector for dietary tags
+/// - Checkboxes for "Chef's Special" and "Availability"
+/// - A submit button that shows a loading indicator during submission
 class MenuItemForm extends StatefulWidget {
+  /// Optional initial data to populate the form in edit mode.
+  ///
+  /// The map can contain any subset of the following keys:
+  /// - 'name' (String)
+  /// - 'description' (String)
+  /// - 'price' (double)
+  /// - 'categoryId' (String)
+  /// - 'preparationTime' (int)
+  /// - 'dietaryTags' (List<String>)
+  /// - 'chefSpecial' (bool)
+  /// - 'availability' (bool)
   final Map<String, dynamic>? initialData;
+
+  /// Callback invoked when the form passes validation and the submit button is pressed.
+  ///
+  /// The parent widget is expected to handle the actual submission logic
+  /// (e.g., calling a ViewModel method) and control the [isSubmitting] flag.
   final VoidCallback onSubmit;
+
+  /// Whether a submission is currently in progress.
+  ///
+  /// When `true`, the submit button is disabled and shows a loading spinner.
   final bool isSubmitting;
+
+  /// The text displayed on the submit button (e.g., 'Create', 'Update').
   final String submitButtonText;
 
+  /// Creates a [MenuItemForm].
   const MenuItemForm({
     super.key,
     this.initialData,
@@ -18,18 +61,52 @@ class MenuItemForm extends StatefulWidget {
   State<MenuItemForm> createState() => MenuItemFormState();
 }
 
+/// The state class for [MenuItemForm].
+///
+/// Manages all text editing controllers, form validation state, dietary tag
+/// selection, and boolean toggles. Provides public methods [validate] and
+/// [getFormData] for the parent widget to trigger validation and retrieve
+/// the collected data.
+///
+/// This state class is intentionally public to allow external access to its
+/// methods (e.g., from a parent widget that holds a GlobalKey<MenuItemFormState>).
 class MenuItemFormState extends State<MenuItemForm> {
+  // ---------------------------------------------------------------------------
+  // Form State Keys & Controllers
+  // ---------------------------------------------------------------------------
+
+  /// Global key used to validate the entire form.
   final _formKey = GlobalKey<FormState>();
+
+  /// Controller for the menu item name input field.
   late TextEditingController _nameController;
+
+  /// Controller for the description input field.
   late TextEditingController _descriptionController;
+
+  /// Controller for the price input field.
   late TextEditingController _priceController;
+
+  /// Controller for the category ID input field.
   late TextEditingController _categoryController;
+
+  /// Controller for the preparation time input field.
   late TextEditingController _preparationTimeController;
 
+  // ---------------------------------------------------------------------------
+  // Form Values (Non‑Text Fields)
+  // ---------------------------------------------------------------------------
+
+  /// Currently selected dietary tags.
   final List<String> _selectedDietaryTags = [];
+
+  /// Whether the item is marked as a chef's special.
   bool _chefSpecial = false;
+
+  /// Whether the item is currently available.
   bool _availability = true;
 
+  /// List of all available dietary tags that can be selected.
   final List<String> _availableDietaryTags = [
     'vegetarian',
     'vegan',
@@ -39,10 +116,15 @@ class MenuItemFormState extends State<MenuItemForm> {
     'nut-free',
   ];
 
+  // ---------------------------------------------------------------------------
+  // Lifecycle Methods
+  // ---------------------------------------------------------------------------
+
   @override
   void initState() {
     super.initState();
 
+    // Initialize text controllers with initial data (or empty defaults).
     _nameController = TextEditingController(
       text: widget.initialData?['name'] ?? '',
     );
@@ -59,15 +141,19 @@ class MenuItemFormState extends State<MenuItemForm> {
       text: widget.initialData?['preparationTime']?.toString() ?? '15',
     );
 
+    // Populate dietary tags if provided.
     _selectedDietaryTags.addAll(
       List<String>.from(widget.initialData?['dietaryTags'] ?? []),
     );
+
+    // Set boolean flags from initial data, falling back to defaults.
     _chefSpecial = widget.initialData?['chefSpecial'] ?? false;
     _availability = widget.initialData?['availability'] ?? true;
   }
 
   @override
   void dispose() {
+    // Dispose all controllers to free resources.
     _nameController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
@@ -76,10 +162,22 @@ class MenuItemFormState extends State<MenuItemForm> {
     super.dispose();
   }
 
+  // ---------------------------------------------------------------------------
+  // Public Methods (For Parent Widget)
+  // ---------------------------------------------------------------------------
+
+  /// Validates the form and returns `true` if all fields are valid.
+  ///
+  /// Should be called by the parent widget before retrieving form data.
   bool validate() {
     return _formKey.currentState?.validate() ?? false;
   }
 
+  /// Returns a map containing all current form field values.
+  ///
+  /// The returned map has the same structure as the [initialData] map and
+  /// is suitable for passing to [MenuViewModel.createMenuItem] or
+  /// [MenuViewModel.updateMenuItem].
   Map<String, dynamic> getFormData() {
     return {
       'name': _nameController.text,
@@ -93,6 +191,10 @@ class MenuItemFormState extends State<MenuItemForm> {
     };
   }
 
+  // ---------------------------------------------------------------------------
+  // Build Method
+  // ---------------------------------------------------------------------------
+
   @override
   Widget build(BuildContext context) {
     return Form(
@@ -100,7 +202,9 @@ class MenuItemFormState extends State<MenuItemForm> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Name field
+          // ------------------------------
+          // Item Name
+          // ------------------------------
           TextFormField(
             controller: _nameController,
             decoration: const InputDecoration(
@@ -119,7 +223,9 @@ class MenuItemFormState extends State<MenuItemForm> {
           ),
           const SizedBox(height: 16),
 
-          // Description field
+          // ------------------------------
+          // Description
+          // ------------------------------
           TextFormField(
             controller: _descriptionController,
             decoration: const InputDecoration(
@@ -140,7 +246,9 @@ class MenuItemFormState extends State<MenuItemForm> {
           ),
           const SizedBox(height: 16),
 
-          // Price field
+          // ------------------------------
+          // Price
+          // ------------------------------
           TextFormField(
             controller: _priceController,
             decoration: const InputDecoration(
@@ -162,7 +270,9 @@ class MenuItemFormState extends State<MenuItemForm> {
           ),
           const SizedBox(height: 16),
 
-          // Category field
+          // ------------------------------
+          // Category ID
+          // ------------------------------
           TextFormField(
             controller: _categoryController,
             decoration: const InputDecoration(
@@ -178,7 +288,9 @@ class MenuItemFormState extends State<MenuItemForm> {
           ),
           const SizedBox(height: 16),
 
-          // Preparation time field
+          // ------------------------------
+          // Preparation Time
+          // ------------------------------
           TextFormField(
             controller: _preparationTimeController,
             decoration: const InputDecoration(
@@ -199,7 +311,9 @@ class MenuItemFormState extends State<MenuItemForm> {
           ),
           const SizedBox(height: 16),
 
-          // Dietary tags
+          // ------------------------------
+          // Dietary Tags (Filter Chips)
+          // ------------------------------
           const Text(
             'Dietary Tags',
             style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
@@ -226,7 +340,9 @@ class MenuItemFormState extends State<MenuItemForm> {
           ),
           const SizedBox(height: 16),
 
-          // Checkboxes
+          // ------------------------------
+          // Chef's Special & Availability
+          // ------------------------------
           Row(
             children: [
               Checkbox(
@@ -252,7 +368,9 @@ class MenuItemFormState extends State<MenuItemForm> {
           ),
           const SizedBox(height: 24),
 
-          // Submit button
+          // ------------------------------
+          // Submit Button
+          // ------------------------------
           ElevatedButton(
             onPressed: widget.isSubmitting ? null : widget.onSubmit,
             style: ElevatedButton.styleFrom(

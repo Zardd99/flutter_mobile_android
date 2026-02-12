@@ -19,7 +19,7 @@ class RestaurantApp extends StatelessWidget {
         useMaterial3: true,
         appBarTheme: const AppBarTheme(elevation: 0, centerTitle: true),
       ),
-      initialRoute: '/',
+      initialRoute: '/orders',
       routes: {
         '/': (context) => const LoginScreen(),
         '/login': (context) => const LoginScreen(),

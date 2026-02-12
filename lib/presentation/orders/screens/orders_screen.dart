@@ -1,12 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:restaurant_mobile_app/domain/repositories/order_repository.dart';
 import 'package:restaurant_mobile_app/injector.dart';
-import 'package:restaurant_mobile_app/domain/entities/order.dart';
-import 'package:restaurant_mobile_app/domain/entities/order_stats_entity.dart';
 import 'package:restaurant_mobile_app/presentation/auth/view_models/auth_manager.dart';
+import 'package:restaurant_mobile_app/presentation/orders/coordinator/orders_coordinator.dart';
+import 'package:restaurant_mobile_app/presentation/orders/managers/order_manager.dart';
 import 'package:restaurant_mobile_app/presentation/orders/view_models/orders_view_model.dart';
+import 'package:restaurant_mobile_app/presentation/orders/widgets/order_card.dart';
+import 'package:restaurant_mobile_app/presentation/orders/widgets/order_filter_button.dart';
+import 'package:restaurant_mobile_app/presentation/orders/widgets/order_stats_card.dart';
 
+// -----------------------------------------------------------------------------
+// Screen: OrdersScreen (Stateful)
+// -----------------------------------------------------------------------------
+
+/// The main screen for order management.
+///
+/// This screen displays a list of orders, a statistics card (if available),
+/// and provides controls for filtering, refreshing, and creating new orders.
+///
+/// It initialises the [OrdersViewModel] with the required dependencies
+/// ([OrderManager] from DI and the authentication token from [AuthManager])
+/// and triggers the initial data load. The actual UI is delegated to the
+/// stateless [_OrdersScreenContent] widget, which observes the view model
+/// and reacts to state changes.
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
 
@@ -14,19 +30,48 @@ class OrdersScreen extends StatefulWidget {
   State<OrdersScreen> createState() => _OrdersScreenState();
 }
 
+/// State class for [OrdersScreen].
+///
+/// Responsible for:
+/// - Creating the [OrdersViewModel] once.
+/// - Triggering the initial data load (orders + stats) exactly once.
+/// - Providing the view model to the widget subtree via [ChangeNotifierProvider].
 class _OrdersScreenState extends State<OrdersScreen> {
-  late OrdersViewModel _viewModel;
+  late final OrdersViewModel _viewModel;
+
+  /// Flag to ensure that data is loaded only once when the screen becomes
+  /// dependent on inherited widgets (see [didChangeDependencies]).
+  bool _dataLoaded = false;
 
   @override
   void initState() {
     super.initState();
-    // Get auth token from AuthManager
-    final authManager = context.watch<AuthManager>();
-    final token = authManager.token;
-    _viewModel = OrdersViewModel(get<OrderRepository>(), token);
-    _loadData();
+
+    // Obtain the current authentication token from the AuthManager.
+    // This screen is assumed to be accessible only when the user is logged in,
+    // so token is expected to be non‑null. If null, the app will crash – this
+    // is intentional as it indicates a serious navigation / auth flow bug.
+    final authToken = context.read<AuthManager>().token!;
+
+    // Instantiate the view model with its dependencies.
+    _viewModel = OrdersViewModel(
+      get<OrderManager>(), // Resolved from the dependency injection container.
+      authToken,
+    );
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    // Load data only once, after the context is fully wired to providers.
+    if (!_dataLoaded) {
+      _dataLoaded = true;
+      _loadData();
+    }
+  }
+
+  /// Triggers the asynchronous loading of orders and order statistics.
   Future<void> _loadData() async {
     await _viewModel.loadOrders();
     await _viewModel.loadOrderStats();
@@ -34,75 +79,102 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
+    // Expose the existing view model instance to the subtree.
+    // Using .value prevents unnecessary re‑creation of the provider.
+    return ChangeNotifierProvider<OrdersViewModel>.value(
       value: _viewModel,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Order Management'),
-          leading: IconButton(
-            icon: const Icon(Icons.arrow_back),
-            onPressed: () => Navigator.pop(context),
+      child: _OrdersScreenContent(loadData: _loadData),
+    );
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Content Widget (Stateless)
+// -----------------------------------------------------------------------------
+
+/// The stateless UI part of the orders screen.
+///
+/// This widget observes the [OrdersViewModel] via [Consumer] and rebuilds
+/// whenever the model notifies listeners. It separates the presentation logic
+/// from the initialisation logic defined in the stateful [OrdersScreen].
+///
+/// It receives a [loadData] callback from its parent to enable refresh
+/// operations (pull‑to‑refresh, retry, manual refresh button).
+class _OrdersScreenContent extends StatelessWidget {
+  /// Callback that reloads orders and statistics.
+  final Future<void> Function() loadData;
+
+  const _OrdersScreenContent({required this.loadData});
+
+  @override
+  Widget build(BuildContext context) {
+    final viewModel = Provider.of<OrdersViewModel>(context);
+    final coordinator = const OrdersCoordinator();
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Order Management'),
+        actions: [
+          // Filter button – delegates filter changes to the view model.
+          OrderFilterButton(
+            onFilterChanged: (status) => viewModel.loadOrders(status: status),
           ),
-          actions: [
-            _buildFilterButton(context),
-            IconButton(icon: const Icon(Icons.refresh), onPressed: _loadData),
-          ],
-        ),
-        body: Consumer<OrdersViewModel>(
-          builder: (context, viewModel, child) {
-            if (viewModel.isLoading && viewModel.orders.isEmpty) {
-              return const Center(child: CircularProgressIndicator());
-            }
+          // Manual refresh button.
+          IconButton(icon: const Icon(Icons.refresh), onPressed: loadData),
+        ],
+      ),
+      body: Consumer<OrdersViewModel>(
+        builder: (context, vm, _) {
+          // ----- Loading state (first load) -----
+          if (vm.isLoading && vm.orders.isEmpty) {
+            return const Center(child: CircularProgressIndicator());
+          }
 
-            if (viewModel.errorMessage != null) {
-              return Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text('Error: ${viewModel.errorMessage}'),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: _loadData,
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-              );
-            }
+          // ----- Error state -----
+          if (vm.errorMessage != null) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('Error: ${vm.errorMessage}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: loadData,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
 
-            return _buildOrderList(context, viewModel);
-          },
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => _showCreateOrderDialog(context),
-          child: const Icon(Icons.add),
-        ),
+          // ----- Success / content state -----
+          return _buildOrderList(context, vm, coordinator);
+        },
+      ),
+      // Floating action button to create a new order.
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => coordinator.navigateToCreateOrder(context),
+        child: const Icon(Icons.add),
       ),
     );
   }
 
-  Widget _buildFilterButton(BuildContext context) {
-    return PopupMenuButton<String>(
-      onSelected: (status) {
-        final viewModel = context.read<OrdersViewModel>();
-        viewModel.loadOrders(status: status == 'all' ? null : status);
-      },
-      itemBuilder: (context) => [
-        const PopupMenuItem(value: 'all', child: Text('All Orders')),
-        const PopupMenuItem(value: 'pending', child: Text('Pending')),
-        const PopupMenuItem(value: 'confirmed', child: Text('Confirmed')),
-        const PopupMenuItem(value: 'preparing', child: Text('Preparing')),
-        const PopupMenuItem(value: 'ready', child: Text('Ready')),
-        const PopupMenuItem(value: 'served', child: Text('Served')),
-        const PopupMenuItem(value: 'cancelled', child: Text('Cancelled')),
-      ],
-      icon: const Icon(Icons.filter_list),
-    );
-  }
-
-  Widget _buildOrderList(BuildContext context, OrdersViewModel viewModel) {
+  /// Builds the main list of orders.
+  ///
+  /// If [viewModel.orderStats] is not null, a [OrderStatsCard] is inserted
+  /// at the top of the list. Otherwise, the list starts directly with the
+  /// first order.
+  ///
+  /// The list supports pull‑to‑refresh via [RefreshIndicator], and each
+  /// [OrderCard] is tappable and provides a status update callback.
+  Widget _buildOrderList(
+    BuildContext context,
+    OrdersViewModel viewModel,
+    OrdersCoordinator coordinator,
+  ) {
     final orders = viewModel.filteredOrders;
 
+    // ----- Empty state -----
     if (orders.isEmpty) {
       return const Center(
         child: Column(
@@ -114,306 +186,48 @@ class _OrdersScreenState extends State<OrdersScreen> {
               'No orders found',
               style: TextStyle(fontSize: 18, color: Colors.grey),
             ),
-            Text(
-              'Create your first order',
-              style: TextStyle(color: Colors.grey),
-            ),
           ],
         ),
       );
     }
 
+    // ----- List with optional stats card -----
     return RefreshIndicator(
-      onRefresh: _loadData,
-      child: ListView(
-        children: [
-          if (viewModel.orderStats != null)
-            _buildStatsCard(viewModel.orderStats!),
-          ...orders.map((order) => _buildOrderCard(order, viewModel)),
-        ],
-      ),
-    );
-  }
+      onRefresh: loadData,
+      child: ListView.builder(
+        // If stats are present, we need one extra item at the top.
+        itemCount: orders.length + (viewModel.orderStats != null ? 1 : 0),
+        itemBuilder: (context, index) {
+          // First item: order statistics card (if available)
+          if (viewModel.orderStats != null && index == 0) {
+            return OrderStatsCard(stats: viewModel.orderStats!);
+          }
 
-  Widget _buildStatsCard(OrderStatsEntity stats) {
-    return Card(
-      margin: const EdgeInsets.all(16),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            const Text(
-              'Today\'s Summary',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        '\$${stats.dailyEarnings.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                      const Text(
-                        'Revenue',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
+          // Adjust index if stats card is present.
+          final orderIndex = viewModel.orderStats != null ? index - 1 : index;
+          final order = orders[orderIndex];
+
+          return OrderCard(
+            order: order,
+            onTap: () => coordinator.navigateToOrderDetails(context, order),
+            onStatusUpdate: (newStatus) async {
+              final result = await viewModel.updateOrderStatus(
+                orderId: order.id,
+                status: newStatus,
+              );
+
+              // Show appropriate feedback based on the result.
+              result.fold(
+                onSuccess: (_) => coordinator.showSuccessSnackbar(
+                  context,
+                  'Status updated successfully',
                 ),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Text(
-                        '${stats.todayOrderCount}',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const Text(
-                        'Orders',
-                        style: TextStyle(color: Colors.grey),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            if (stats.bestSellingDishes.isNotEmpty) ...[
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 8),
-              const Text(
-                'Best Sellers',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 8),
-              ...stats.bestSellingDishes
-                  .take(3)
-                  .map(
-                    (dish) => ListTile(
-                      leading: const Icon(Icons.restaurant, size: 20),
-                      title: Text(dish.name),
-                      subtitle: Text('${dish.quantity} sold'),
-                      trailing: Text('\$${dish.revenue.toStringAsFixed(2)}'),
-                    ),
-                  ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderCard(Order order, OrdersViewModel viewModel) {
-    Color statusColor = _getStatusColor(order.status);
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListTile(
-        leading: const Icon(Icons.shopping_cart, color: Colors.blue),
-        title: Text('Order #${order.id.substring(0, 8)}'),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (order.customerName != null)
-              Text('Customer: ${order.customerName}'),
-            Text('Amount: \$${order.totalAmount.toStringAsFixed(2)}'),
-            Text('Items: ${order.items.length}'),
-            Text('Date: ${_formatDate(order.orderDate)}'),
-          ],
-        ),
-        trailing: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Chip(
-              label: Text(
-                order.statusLabel,
-                style: const TextStyle(color: Colors.white, fontSize: 12),
-              ),
-              backgroundColor: statusColor,
-            ),
-            const SizedBox(height: 4),
-            PopupMenuButton<String>(
-              onSelected: (newStatus) async {
-                final result = await viewModel.updateOrderStatus(
-                  order.id,
-                  newStatus,
-                );
-                if (result.isFailure) {
-                  // Use a global key or handle the error in the ViewModel
-                  _showErrorSnackbar(result.failureOrNull!.message);
-                }
-              },
-              itemBuilder: (context) => _buildStatusMenuItems(order.status),
-              icon: const Icon(Icons.more_vert, size: 20),
-            ),
-          ],
-        ),
-        onTap: () => _showOrderDetails(order),
-      ),
-    );
-  }
-
-  List<PopupMenuItem<String>> _buildStatusMenuItems(String currentStatus) {
-    final allStatuses = [
-      'pending',
-      'confirmed',
-      'preparing',
-      'ready',
-      'served',
-      'cancelled',
-    ];
-    final availableStatuses = allStatuses
-        .where((status) => status != currentStatus)
-        .toList();
-
-    return availableStatuses.map((status) {
-      return PopupMenuItem<String>(
-        value: status,
-        child: Text(_getStatusLabel(status)),
-      );
-    }).toList();
-  }
-
-  String _getStatusLabel(String status) {
-    switch (status) {
-      case 'pending':
-        return 'Set Pending';
-      case 'confirmed':
-        return 'Confirm';
-      case 'preparing':
-        return 'Start Preparing';
-      case 'ready':
-        return 'Mark as Ready';
-      case 'served':
-        return 'Mark as Served';
-      case 'cancelled':
-        return 'Cancel';
-      default:
-        return status;
-    }
-  }
-
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'pending':
-        return Colors.orange;
-      case 'confirmed':
-        return Colors.blue;
-      case 'preparing':
-        return Colors.blue;
-      case 'ready':
-        return Colors.green;
-      case 'served':
-        return Colors.purple;
-      case 'cancelled':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, '0')}';
-  }
-
-  void _showErrorSnackbar(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $message')));
-    }
-  }
-
-  void _showOrderDetails(Order order) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Order Details',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: const Icon(Icons.person),
-                title: const Text('Customer'),
-                subtitle: Text(order.customerName ?? 'Guest'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.attach_money),
-                title: const Text('Amount'),
-                subtitle: Text('\$${order.totalAmount.toStringAsFixed(2)}'),
-              ),
-              ListTile(
-                leading: const Icon(Icons.flag),
-                title: const Text('Status'),
-                subtitle: Text(order.statusLabel),
-              ),
-              ListTile(
-                leading: const Icon(Icons.calendar_today),
-                title: const Text('Order Date'),
-                subtitle: Text(_formatDate(order.orderDate)),
-              ),
-              ListTile(
-                leading: const Icon(Icons.restaurant),
-                title: const Text('Items'),
-                subtitle: Text('${order.items.length} items'),
-              ),
-              if (order.tableNumber != null)
-                ListTile(
-                  leading: const Icon(Icons.table_restaurant),
-                  title: const Text('Table'),
-                  subtitle: Text('Table ${order.tableNumber}'),
-                ),
-              const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  void _showCreateOrderDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Create New Order'),
-        content: const Text('Order creation feature will be implemented soon.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              // Navigate to order creation screen
-              // Navigator.pushNamed(context, '/create-order');
+                onFailure: (failure) =>
+                    coordinator.showErrorSnackbar(context, failure.message),
+              );
             },
-            child: const Text('Continue'),
-          ),
-        ],
+          );
+        },
       ),
     );
   }

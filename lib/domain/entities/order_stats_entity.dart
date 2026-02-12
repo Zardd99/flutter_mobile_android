@@ -1,4 +1,6 @@
-class OrderStatsEntity {
+import 'package:equatable/equatable.dart';
+
+class OrderStatsEntity extends Equatable {
   final double dailyEarnings;
   final double weeklyEarnings;
   final double yearlyEarnings;
@@ -44,9 +46,20 @@ class OrderStatsEntity {
       'bestSellingDishes': bestSellingDishes.map((e) => e.toJson()).toList(),
     };
   }
+
+  @override
+  List<Object?> get props => [
+    dailyEarnings,
+    weeklyEarnings,
+    yearlyEarnings,
+    todayOrderCount,
+    avgOrderValue,
+    ordersByStatus,
+    bestSellingDishes,
+  ];
 }
 
-class BestSellingDishEntity {
+class BestSellingDishEntity extends Equatable {
   final String name;
   final int quantity;
   final double revenue;
@@ -65,7 +78,12 @@ class BestSellingDishEntity {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {'name': name, 'quantity': quantity, 'revenue': revenue};
-  }
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'quantity': quantity,
+    'revenue': revenue,
+  };
+
+  @override
+  List<Object?> get props => [name, quantity, revenue];
 }
